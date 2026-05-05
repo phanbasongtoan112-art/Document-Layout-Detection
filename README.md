@@ -51,7 +51,6 @@ vbpl-layout-detection/
 │   └── vbpl_download.py
 ├── visualize_predictions.py  # Script for visualizing bounding boxes
 ├── requirements.txt          # Python dependencies
-├── GIT_WORKFLOW.md           # Solo developer git guide
 └── README.md                 # Project documentation
 ```
 
