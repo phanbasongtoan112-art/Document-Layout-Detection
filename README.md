@@ -1,278 +1,200 @@
-# PDF Layout Detection Pipeline for Vietnamese Legal Documents
+# VBPL PDF Layout Detection Pipeline
 
-A production-ready pipeline for detecting document layout elements (header, title, article, paragraph, list, table, signature, footer) in Vietnamese legal documents sourced from [vbpl.vn](https://vbpl.vn).
+This repository provides a complete data pipeline to crawl legal PDF documents from [vbpl.vn](https://vbpl.vn), convert them to images, and perform advanced layout detection using a pre-trained DocLayNet YOLO model.
 
-## Overview
-
-This project implements a **hybrid approach**:
-
-| Strategy | When Used | Speed |
-|---|---|---|
-| **pdfplumber + heuristics** | PDF has a text layer | ⚡ Fast |
-| **YOLOv8 inference** | Scanned PDF (no text) | 🐢 Slower, GPU recommended |
-| **Active learning** | Improving model accuracy | 🔄 Iterative |
-
-### Layout Classes (8)
-
-| ID | Class | Description |
-|----|-------|-------------|
-| 0 | `header` | Document header (issuing authority, doc number) |
-| 1 | `title` | Document title (QUYẾT ĐỊNH, NGHỊ ĐỊNH, …) |
-| 2 | `article` | Article block starting with "Điều N" |
-| 3 | `paragraph` | Standard body text |
-| 4 | `list` | Bulleted or numbered items |
-| 5 | `table` | Tabular data |
-| 6 | `signature` | Signature area |
-| 7 | `footer` | Page footer, recipient list |
+## 📑 Table of Contents
+1. [Project Goal & Key Results](#-project-goal--key-results)
+2. [Folder Structure](#-folder-structure)
+3. [Prerequisites](#-prerequisites)
+4. [Installation Guide](#-installation-guide)
+5. [Usage Instructions](#-usage-instructions)
+   - [1. Download PDFs](#1-download-pdfs)
+   - [2. Convert PDFs to Images](#2-convert-pdfs-to-images)
+   - [3. Run Layout Detection](#3-run-layout-detection)
+   - [4. Visualize Predictions](#4-visualize-predictions)
+6. [Results & Output Format](#-results--output-format)
+7. [GitHub Workflow for Collaborators](#-github-workflow-for-collaborators)
+8. [Troubleshooting](#-troubleshooting)
+9. [License](#-license)
 
 ---
 
-## Project Structure
+## 🎯 Project Goal & Key Results
 
-```
-pdf_layout_project/
-├── config/
-│   └── config.yaml                 # All configurable settings
-├── data/
-│   ├── pdfs/                       # Downloaded PDF files
-│   ├── metadata/                   # JSON metadata from API
-│   ├── images/                     # Rendered PNG pages
-│   ├── annotations/                # Soft labels from pdfplumber (JSON)
-│   ├── yolo/                       # YOLO dataset (images + labels)
-│   └── manual_annotations/         # Hand-corrected labels
+**Goal:** Automate the acquisition of Vietnamese legal texts and extract structured layout elements (such as Title, Text, Table, List-item, etc.) for further NLP and Data Science applications.
+
+**Key Results:**
+- **Acquisition:** Successfully downloaded 287 PDF documents from vbpl.vn.
+- **Preprocessing:** Converted the PDFs into 1,672 high-quality PNG images.
+- **Inference:** Achieved a **99.7% detection rate** (1,667 out of 1,672 images had valid detections).
+- **Objects Detected:** Successfully detected and localized **9,085 layout objects** across the dataset.
+
+---
+
+## 📂 Folder Structure
+
+```text
+vbpl-layout-detection/
+├── data/                     
+│   ├── images/               # Generated PNG images (git-ignored)
+│   └── pdfs/                 # Downloaded PDFs (git-ignored)
+├── models/
+│   └── yolo26n_doc_layout.pt # Pre-trained DocLayNet YOLO model
+├── predictions/
+│   └── doclaynet_pdf/        # Output from layout detection
+│       ├── labels/           # YOLO format .txt bounding boxes
+│       ├── predictions.json  # Comprehensive JSON results
+│       └── summary.csv       # Summary statistics per image
 ├── scripts/
-│   ├── 01_crawl_pdfs.py            # Crawl PDFs from vbpl.vn API
-│   ├── 02_extract_layout_pdfplumber.py  # Extract text/bbox + heuristic labels
-│   ├── 03_convert_to_yolo.py       # Convert to YOLO format
-│   ├── 04_prepare_active_learning.py    # Select uncertain samples
-│   ├── 05_train_yolo.py            # Fine-tune YOLOv8
-│   ├── 06_predict_pdf.py           # Predict layout on new PDF
-│   └── utils.py                    # Shared utilities
-├── models/                         # Trained YOLO weights
-├── metrics/                        # Training metrics CSV
-├── requirements.txt
-├── .gitignore
-├── README.md
-└── run_pipeline.py                 # Master orchestration script
+│   ├── convert_pdf_to_images.py
+│   ├── run_doclaynet_inference.py
+│   └── vbpl_download.py
+├── visualize_predictions.py  # Script for visualizing bounding boxes
+├── requirements.txt          # Python dependencies
+├── GIT_WORKFLOW.md           # Solo developer git guide
+└── README.md                 # Project documentation
 ```
 
 ---
 
-## Installation
+## ⚙️ Prerequisites
 
-### Prerequisites
-
-- **Python 3.10+**
-- **Poppler** (required for `pdf2image` on Windows)
-  - Download from [github.com/oschwartz10612/poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases)
-  - Extract and note the path to the `bin/` directory
-  - Update `config/config.yaml` → `poppler.path`
-
-### Setup
-
-```powershell
-# Clone or copy the project
-cd pdf_layout_project
-
-# Create virtual environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Configuration
-
-Edit `config/config.yaml` to set:
-
-- **`poppler.path`** — Path to your Poppler `bin/` directory (e.g., `C:/poppler/Library/bin`)
-- **`api.max_documents`** — How many PDFs to download
-- **`yolo.device`** — `"cpu"` or `"0"` for CUDA GPU
-- **Classification thresholds** — Tune heuristic rules as needed
+To run this project, especially on Windows, you will need:
+1. **Python 3.10**: Make sure Python is added to your system `PATH`.
+2. **Git**: Installed and configured on your machine.
+3. **Poppler for Windows**: Required by the `pdf2image` library.
+   - Download the latest Poppler Windows binaries from [oschwartz10612/poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases).
+   - Extract the `.zip` file to a location like `C:\poppler`.
+   - Add the `C:\poppler\Library\bin` directory to your system's `PATH` Environment Variable.
 
 ---
 
-## Usage — Step by Step
+## 🚀 Installation Guide
 
-### Step 1: Crawl PDFs
+Run the following commands in **PowerShell**:
 
-Download legal documents from the vbpl.vn API:
+1. **Clone the repository:**
+   ```powershell
+   git clone https://github.com/PhanBaSongToan/vbpl-layout-detection.git
+   cd vbpl-layout-detection
+   ```
 
-```powershell
-python scripts/01_crawl_pdfs.py --max 200
-```
+2. **Set up a Virtual Environment:**
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   ```
 
-- Downloads PDFs to `data/pdfs/`
-- Saves metadata JSON to `data/metadata/`
-- Automatically skips already-downloaded files (resumable)
-
-### Step 2: Extract Layout with pdfplumber
-
-Extract text, bounding boxes, and generate soft labels using heuristic rules:
-
-```powershell
-python scripts/02_extract_layout_pdfplumber.py
-```
-
-Or process a single PDF:
-
-```powershell
-python scripts/02_extract_layout_pdfplumber.py --pdf data/pdfs/12345.pdf
-```
-
-- Outputs annotations to `data/annotations/{id}.json`
-- Renders page images to `data/images/{id}_page_{n}.png`
-
-### Step 3: Convert to YOLO Format
-
-Convert the soft labels into YOLO-format training data:
-
-```powershell
-python scripts/03_convert_to_yolo.py
-```
-
-Use a custom confidence threshold:
-
-```powershell
-python scripts/03_convert_to_yolo.py --min-confidence 0.8
-```
-
-- Creates `data/yolo/images/{train,val}/` and `data/yolo/labels/{train,val}/`
-- Generates `data/yolo/data.yaml`
-
-### Step 4: Train YOLOv8 (Optional for initial run)
-
-Fine-tune YOLOv8n on the generated dataset:
-
-```powershell
-python scripts/05_train_yolo.py --epochs 50 --batch 16
-
-# With GPU:
-python scripts/05_train_yolo.py --epochs 100 --device 0
-
-# Resume interrupted training:
-python scripts/05_train_yolo.py --resume
-```
-
-- Best model saved to `models/best.pt`
-- Metrics logged to `metrics/training_metrics.csv`
-
-### Step 5: Active Learning
-
-Select uncertain samples for manual annotation:
-
-```powershell
-python scripts/04_prepare_active_learning.py --max 50
-```
-
-- Outputs `data/uncertain_samples.txt` — ranked image paths
-- Creates `data/label_studio_tasks.json` — ready to import into Label Studio
-
-#### Manual Annotation Workflow
-
-1. Import `data/label_studio_tasks.json` into [Label Studio](https://labelstud.io/)
-2. Correct bounding boxes and labels
-3. Export corrected annotations to `data/manual_annotations/`
-4. Merge with existing YOLO labels and retrain:
-
-```powershell
-python scripts/05_train_yolo.py --epochs 50
-```
-
-### Step 6: Predict on New PDF
-
-Run layout detection on any PDF:
-
-```powershell
-# Auto-detect: heuristics for text PDFs, model for scanned
-python scripts/06_predict_pdf.py --pdf path/to/document.pdf
-
-# Force YOLO model
-python scripts/06_predict_pdf.py --pdf path/to/document.pdf --force-model
-
-# Draw bounding boxes on images
-python scripts/06_predict_pdf.py --pdf path/to/document.pdf --draw --output results/
-```
-
-### Run All Steps at Once
-
-Use the master pipeline script:
-
-```powershell
-# Run everything
-python run_pipeline.py --max-docs 200
-
-# Run specific steps only
-python run_pipeline.py --steps 1 2 3
-
-# Skip training
-python run_pipeline.py --skip-train
-```
+3. **Install Dependencies:**
+   ```powershell
+   pip install -r requirements.txt
+   ```
 
 ---
 
-## Heuristic Classification Rules
+## 💡 Usage Instructions
 
-The pdfplumber extraction applies the following rules to classify text blocks:
-
-| Class | Detection Rule |
-|-------|---------------|
-| **header** | Top 12% of page + Vietnamese header keywords ("CỘNG HÒA…", "Số:") or small font |
-| **title** | Font ≥ 1.3× median + title keywords ("QUYẾT ĐỊNH", "NGHỊ ĐỊNH") |
-| **article** | Text starts with "Điều" + number |
-| **paragraph** | Default for standard text blocks |
-| **list** | Lines starting with `a)`, `1.`, `-`, `+`, or `•` |
-| **table** | Detected via `pdfplumber.find_tables()` (grid-line analysis) |
-| **signature** | Bottom 30% + keywords ("Ký tên", "TM.", "CHỦ TỊCH") |
-| **footer** | Bottom 12% of page + keywords ("Trang", "Nơi nhận:") or small font |
-
-All thresholds are configurable in `config/config.yaml` under `heuristics`.
-
----
-
-## Output Format
-
-Layout annotations are saved as JSON:
-
-```json
-[
-  {
-    "page": 1,
-    "width": 595.276,
-    "height": 841.89,
-    "elements": [
-      {
-        "type": "header",
-        "bbox": [72.0, 36.0, 523.0, 85.0],
-        "text": "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
-        "confidence": 0.90
-      },
-      {
-        "type": "title",
-        "bbox": [150.0, 120.0, 445.0, 155.0],
-        "text": "QUYẾT ĐỊNH",
-        "confidence": 0.95
-      }
-    ]
-  }
-]
+### 1. Download PDFs
+Fetch PDF files directly from the VBPL database.
+```powershell
+python scripts/vbpl_download.py --limit 300 --resume
 ```
+**Arguments:**
+- `--limit` (optional): Maximum number of PDFs to download.
+- `--resume` (optional): Skip already downloaded files and pick up where you left off.
+
+### 2. Convert PDFs to Images
+Convert the downloaded PDF documents into PNG format for YOLO inference.
+```powershell
+python scripts/convert_pdf_to_images.py --input data/pdfs --output data/images --dpi 300
+```
+**Arguments:**
+- `--input`: Folder containing the downloaded `.pdf` files.
+- `--output`: Folder where `.png` images will be saved.
+- `--dpi` (optional): Resolution of the output images (default: `300`).
+
+### 3. Run Layout Detection
+Run the pre-trained DocLayNet YOLO model on the generated images.
+```powershell
+python scripts/run_doclaynet_inference.py --input data/images --output predictions/doclaynet_pdf --conf 0.25 --device cpu
+```
+**Arguments:**
+- `--input`: Folder containing the `.png` images.
+- `--output`: Folder to save YOLO labels, JSON, and CSV.
+- `--conf` (optional): Confidence threshold for detections (default: `0.25`).
+- `--device` (optional): Compute device to use (`cpu` or `cuda:0` for GPU).
+- `--resume` (optional): Skip images that already exist in `predictions.json`.
+
+### 4. Visualize Predictions
+Draw bounding boxes over an original image to verify layout detection quality.
+```powershell
+python visualize_predictions.py --image "data/images/sample_page_1.png" --label-dir "predictions/doclaynet_pdf/labels" --output "annotated_sample.png" --conf 0.25
+```
+**Arguments:**
+- `--image` (required): Path to the input PNG image.
+- `--label-dir` (optional): Directory containing the corresponding YOLO `.txt` files.
+- `--output` (optional): Path to save the annotated image (default: `annotated.png`).
+- `--conf` (optional): Filter drawn boxes by confidence threshold.
 
 ---
 
-## Troubleshooting
+## 📊 Results & Output Format
 
-| Issue | Solution |
-|-------|---------|
-| `pdf2image` fails on Windows | Install Poppler and set `poppler.path` in `config.yaml` |
-| API returns 403/429 errors | Reduce `page_size`, increase `retry_delay` in config |
-| Low detection quality | Run active learning (step 5), manually correct, and retrain |
-| CUDA out of memory | Reduce `batch_size` or `image_size` in config |
-| No text extracted from PDF | The PDF is likely scanned; use `--force-model` for YOLO inference |
+After running layout detection, results are saved in the `predictions/doclaynet_pdf/` directory:
+1. **`predictions.json`**: A master file containing the filename, class names (e.g., `Title`, `Text`, `List-item`), exact bounding box coordinates `[x1, y1, x2, y2]`, and confidence scores for all processed images.
+2. **`summary.csv`**: A spreadsheet summarizing total boxes, classes detected, and average confidence per image.
+3. **`labels/` Folder**: YOLO-format text files (one per image). Each row represents a bounding box: `class_id x_center y_center width height`.
+
+*(Note: Data folders like `data/images/` and `data/pdfs/` are excluded via `.gitignore` to keep the repository lightweight.)*
 
 ---
 
-## License
+## 🤝 GitHub Workflow for Collaborators
 
-This project is for educational and research purposes. The legal documents are sourced from the public Vietnamese legal database (vbpl.vn).
+If you want to contribute to this project, follow this standard Git flow:
+
+1. **Fork the Repo**: Click the "Fork" button at the top right of this page.
+2. **Clone your Fork locally**:
+   ```powershell
+   git clone https://github.com/YOUR_USERNAME/vbpl-layout-detection.git
+   cd vbpl-layout-detection
+   ```
+3. **Create a Feature Branch**:
+   ```powershell
+   git checkout -b feature/add-new-model
+   ```
+4. **Make Changes, Commit, and Push**:
+   ```powershell
+   git add .
+   git commit -m "feat: implement new model inference logic"
+   git push origin feature/add-new-model
+   ```
+5. **Open a Pull Request (PR)**: Go to the original repository on GitHub and open a PR from your new branch to the `main` branch.
+6. **Code Review & Merge**: Once approved, your code will be merged into `main`.
+7. **Keep your local `main` updated**:
+   ```powershell
+   git checkout main
+   git pull origin main
+   ```
+
+---
+
+## 🛠️ Troubleshooting
+
+- **`pdf2image.exceptions.PDFInfoNotInstalledError: Unable to get page count.`**
+  - **Cause:** Poppler is not installed or not in your system PATH.
+  - **Fix:** Download Poppler, extract it, and add the `bin/` folder to your Windows Environment Variables. Restart your PowerShell or IDE afterward.
+
+- **`CUDA Out of Memory` (when using GPU)**
+  - **Cause:** The images are too large, or batch size is too high for your GPU VRAM.
+  - **Fix:** Switch `--device` to `cpu` or resize the images before running inference.
+
+- **Missing system libraries for OpenCV**
+  - **Cause:** OpenCV requires certain media frameworks.
+  - **Fix:** If you are running this in Docker or WSL, ensure you have `libgl1` and `libglib2.0-0` installed (`apt-get update && apt-get install libgl1 libglib2.0-0`). On standard Windows, the pip package usually handles this automatically.
+
+---
+
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).

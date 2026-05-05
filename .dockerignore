@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+.venv/
+env/
+.env
+
+# Data and Output folders (mounted at runtime)
+data/
+predictions/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDEs
+.vscode/
+.idea/

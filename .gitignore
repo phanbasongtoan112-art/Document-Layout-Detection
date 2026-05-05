@@ -1,5 +1,14 @@
-# Python
+# Virtual environment
+venv/
+.venv/
+env/
+.env
+
+# Python cache and compiled files
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 *.py[cod]
 *$py.class
 *.so
@@ -9,45 +18,16 @@ dist/
 build/
 *.whl
 
-# Virtual environment
-venv/
-.venv/
-env/
-.env
-
-# IDE
+# IDEs and Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-Thumbs.db
-.DS_Store
-desktop.ini
-
-# Data folders (large files, not tracked)
-data/pdfs/
+# Data directories (heavy files)
 data/images/
-data/annotations/
-data/yolo/
-data/metadata/
-data/manual_annotations/
+data/pdfs/
 
-# Models
-models/
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-*.tmp
-*.bak
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Metrics
-metrics/
+# Optional: Large prediction labels (uncomment if you want to exclude them)
+# predictions/doclaynet_pdf/labels/

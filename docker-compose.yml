@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  vbpl-layout:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vbpl-layout:latest
+    container_name: vbpl-layout-container
+    # Mount local directories to prevent baking large files into the image
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./predictions:/app/predictions
+    # Default command when running `docker-compose up`
+    command: >
+      python scripts/run_doclaynet_inference.py 
+      --input data/images 
+      --output predictions/doclaynet_pdf
