@@ -1,0 +1,128 @@
+# ==============================================================================
+# PDF Layout Detection Pipeline — Configuration
+# ==============================================================================
+
+# --- API settings (vbpl.vn) ---
+api:
+  list_url: "https://vbpl-bientap-gateway.moj.gov.vn/api/qtdc/public/doc/all"
+  detail_url_template: "https://vbpl-bientap-gateway.moj.gov.vn/api/qtdc/public/doc/{id}"
+  headers:
+    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    Referer: "https://vbpl.vn/"
+  page_size: 50
+  max_documents: 200        # max PDFs to download (set -1 for unlimited)
+  request_timeout: 30       # seconds
+  retry_count: 3
+  retry_delay: 2            # seconds between retries
+
+# --- Paths ---
+paths:
+  pdf_dir: "data/pdfs"
+  metadata_dir: "data/metadata"
+  image_dir: "data/images"
+  annotation_dir: "data/annotations"
+  yolo_dir: "data/yolo"
+  manual_annotation_dir: "data/manual_annotations"
+  model_dir: "models"
+  metrics_dir: "metrics"
+
+# --- Poppler (required for pdf2image on Windows) ---
+poppler:
+  path: "C:/poppler/Library/bin"   # adjust to your Poppler installation
+
+# --- Image rendering ---
+rendering:
+  dpi: 200                  # DPI for PDF-to-image conversion
+  image_format: "png"
+
+# --- Layout classification heuristics ---
+heuristics:
+  # Position thresholds (fraction of page height)
+  header_top_ratio: 0.12       # blocks in top 12% may be header
+  footer_bottom_ratio: 0.88    # blocks in bottom 12% may be footer
+
+  # Font size ratios (relative to median font size on page)
+  title_font_ratio: 1.3        # font ≥ 1.3× median → title candidate
+  small_font_ratio: 0.85       # font ≤ 0.85× median → header/footer candidate
+
+  # Grouping tolerances (points)
+  line_vertical_tolerance: 3   # max vertical gap to merge chars into same line
+  word_horizontal_tolerance: 5 # max horizontal gap to merge chars into same word
+  block_vertical_tolerance: 8  # max vertical gap to merge lines into same block
+
+  # Keywords for classification (Vietnamese)
+  header_keywords:
+    - "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM"
+    - "Độc lập - Tự do - Hạnh phúc"
+    - "Số:"
+    - "BỘ"
+    - "UBND"
+    - "HỘI ĐỒNG"
+  footer_keywords:
+    - "Trang"
+    - "trang"
+    - "Nơi nhận:"
+  title_keywords:
+    - "QUYẾT ĐỊNH"
+    - "NGHỊ ĐỊNH"
+    - "THÔNG TƯ"
+    - "CHỈ THỊ"
+    - "LUẬT"
+    - "PHÁP LỆNH"
+    - "NGHỊ QUYẾT"
+    - "CÔNG VĂN"
+  article_pattern: "^\\s*Điều\\s+\\d+"
+  list_patterns:
+    - "^\\s*[a-zđ]\\)"     # a), b), c)...
+    - "^\\s*\\d+\\."        # 1., 2., 3....
+    - "^\\s*-\\s"            # - item
+    - "^\\s*\\+\\s"          # + item
+    - "^\\s*•"               # bullet
+  signature_keywords:
+    - "Ký tên"
+    - "Chữ ký"
+    - "TM."
+    - "KT."
+    - "TUQ."
+    - "QUYỀN"
+    - "THỦ TRƯỞNG"
+    - "GIÁM ĐỐC"
+    - "CHỦ TỊCH"
+
+# --- Confidence thresholds ---
+confidence:
+  min_soft_label: 0.5          # minimum confidence to include a soft label
+  min_yolo_convert: 0.7        # minimum confidence to convert to YOLO label
+
+# --- Dataset split ---
+dataset:
+  train_ratio: 0.8
+  val_ratio: 0.2
+  random_seed: 42
+
+# --- YOLO training ---
+yolo:
+  model: "yolov8n.pt"          # pretrained model
+  epochs: 100
+  batch_size: 16
+  image_size: 640
+  device: "cpu"                # "cpu" or "0" for GPU
+  patience: 20
+  workers: 4
+
+# --- Active learning ---
+active_learning:
+  uncertainty_threshold: 0.5   # max confidence below which sample is uncertain
+  max_samples: 100             # max uncertain samples to export
+  entropy_weight: 0.5          # weight for entropy in scoring
+
+# --- Layout class mapping ---
+classes:
+  - header
+  - title
+  - article
+  - paragraph
+  - list
+  - table
+  - signature
+  - footer
