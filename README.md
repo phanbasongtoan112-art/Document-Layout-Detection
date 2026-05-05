@@ -13,9 +13,10 @@ This repository provides a complete data pipeline to crawl legal PDF documents f
    - [3. Run Layout Detection](#3-run-layout-detection)
    - [4. Visualize Predictions](#4-visualize-predictions)
 6. [Results & Output Format](#-results--output-format)
-7. [GitHub Workflow for Collaborators](#-github-workflow-for-collaborators)
-8. [Troubleshooting](#-troubleshooting)
-9. [License](#-license)
+7. [Limitations & Current Model Status](#-limitations--current-model-status)
+8. [GitHub Workflow for Collaborators](#-github-workflow-for-collaborators)
+9. [Troubleshooting](#-troubleshooting)
+10. [License](#-license)
 
 ---
 
@@ -51,6 +52,7 @@ vbpl-layout-detection/
 │   └── vbpl_download.py
 ├── visualize_predictions.py  # Script for visualizing bounding boxes
 ├── requirements.txt          # Python dependencies
+├── GIT_WORKFLOW.md           # Solo developer git guide
 └── README.md                 # Project documentation
 ```
 
@@ -145,6 +147,16 @@ After running layout detection, results are saved in the `predictions/doclaynet_
 3. **`labels/` Folder**: YOLO-format text files (one per image). Each row represents a bounding box: `class_id x_center y_center width height`.
 
 *(Note: Data folders like `data/images/` and `data/pdfs/` are excluded via `.gitignore` to keep the repository lightweight.)*
+
+---
+
+## 🛑 Limitations & Current Model Status
+
+It is important to understand the capabilities and limitations of the current inference model:
+- **Pre-trained Model:** The pipeline currently uses a generic, pre-trained **DocLayNet YOLO model**.
+- **Output Classes:** It outputs bounding boxes mapped to 11 generic DocLayNet classes (e.g., `Text`, `Title`, `List-item`, `Table`). It does **not** output fine-grained legal-specific classes like `Article`, `Signature`, or `Header`.
+- **Dataset Behavior:** On our Vietnamese legal document dataset, the vast majority of detections are simply classified as `Text`. The model effectively acts as a general text-region detector but lacks the semantic understanding of legal document structures.
+- **Next Steps:** To achieve accurate detection of the 8 legal-domain classes (header, title, article, paragraph, list, table, signature, footer) identified during manual EDA, the dataset requires **manual annotation** of a few hundred images followed by **fine-tuning** a custom YOLO model.
 
 ---
 
